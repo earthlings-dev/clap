@@ -7,6 +7,8 @@ use std::{
 use clap_lex::OsStrExt as _;
 
 // Internal
+use crate::ArgAction;
+use crate::INTERNAL_ERROR_MSG;
 use crate::builder::{Arg, Command};
 use crate::error::Error as ClapError;
 use crate::error::Result as ClapResult;
@@ -17,8 +19,6 @@ use crate::parser::{ArgMatcher, SubCommand};
 use crate::parser::{Validator, ValueSource};
 use crate::util::AnyValue;
 use crate::util::Id;
-use crate::ArgAction;
-use crate::INTERNAL_ERROR_MSG;
 
 pub(crate) struct Parser<'cmd> {
     cmd: &'cmd mut Command,
@@ -54,14 +54,15 @@ impl<'cmd> Parser<'cmd> {
     ) -> ClapResult<()> {
         debug!("Parser::get_matches_with");
 
-        ok!(self.parse(matcher, raw_args, args_cursor).map_err(|err| {
-            if self.cmd.is_ignore_errors_set() {
-                #[cfg(feature = "env")]
-                let _ = self.add_env(matcher);
-                let _ = self.add_defaults(matcher);
-            }
-            err
-        }));
+        ok!(self
+            .parse(matcher, raw_args, args_cursor)
+            .inspect_err(|_err| {
+                if self.cmd.is_ignore_errors_set() {
+                    #[cfg(feature = "env")]
+                    let _ = self.add_env(matcher);
+                    let _ = self.add_defaults(matcher);
+                }
+            }));
         ok!(self.resolve_pending(matcher));
 
         #[cfg(feature = "env")]
@@ -252,9 +253,7 @@ impl<'cmd> Parser<'cmd> {
 
                             debug!(
                                 "Parser::get_matches_with:FlagSubCommandShort: subcmd_name={}, keep_state={}, flag_subcmd_skip={}",
-                                name,
-                                keep_state,
-                                self.flag_subcmd_skip
+                                name, keep_state, self.flag_subcmd_skip
                             );
 
                             subcmd_name = Some(name);
@@ -482,7 +481,7 @@ impl<'cmd> Parser<'cmd> {
             }
         }
 
-        if let Some(ref pos_sc_name) = subcmd_name {
+        if let Some(pos_sc_name) = &subcmd_name {
             if self.cmd.is_args_conflicts_with_subcommands_set() && valid_arg_found {
                 return Err(ClapError::subcommand_conflict(
                     self.cmd,
@@ -604,10 +603,10 @@ impl<'cmd> Parser<'cmd> {
                     s.get_all_aliases().find(|s| s.starts_with(arg))
                 });
 
-                if let name @ Some(_) = iter.next() {
-                    if iter.next().is_none() {
-                        return name;
-                    }
+                if let name @ Some(_) = iter.next()
+                    && iter.next().is_none()
+                {
+                    return name;
                 }
             }
             // Don't use an else here because we want inference to support exact matching even if
@@ -639,10 +638,10 @@ impl<'cmd> Parser<'cmd> {
                 })
             });
 
-            if let name @ Some(_) = iter.next() {
-                if iter.next().is_none() {
-                    return name;
-                }
+            if let name @ Some(_) = iter.next()
+                && iter.next().is_none()
+            {
+                return name;
             }
         }
         if let Some(sc_name) = self.cmd.find_long_subcmd(arg) {
@@ -745,7 +744,9 @@ impl<'cmd> Parser<'cmd> {
                 }
                 if let Err(error) = p.get_matches_with(&mut sc_matcher, raw_args, args_cursor) {
                     if partial_parsing_enabled {
-                        debug!("Parser::parse_subcommand: ignored error in subcommand {sc_name}: {error:?}");
+                        debug!(
+                            "Parser::parse_subcommand: ignored error in subcommand {sc_name}: {error:?}"
+                        );
                     } else {
                         return Err(error);
                     }
@@ -785,7 +786,7 @@ impl<'cmd> Parser<'cmd> {
             Err(long_arg_os) => {
                 return Ok(ParseResult::NoMatchingArg {
                     arg: long_arg_os.to_string_lossy().into_owned(),
-                })
+                });
             }
         };
         if long_arg.is_empty() {
@@ -800,10 +801,10 @@ impl<'cmd> Parser<'cmd> {
             Some((long_arg, arg))
         } else if self.cmd.is_infer_long_args_set() {
             let mut iter = self.cmd.get_arguments().filter_map(|a| {
-                if let Some(long) = a.get_long() {
-                    if long.starts_with(long_arg) {
-                        return Some((long, a));
-                    }
+                if let Some(long) = a.get_long()
+                    && long.starts_with(long_arg)
+                {
+                    return Some((long, a));
                 }
                 a.aliases
                     .iter()
@@ -1397,10 +1398,10 @@ impl<'cmd> Parser<'cmd> {
         // Override anything that can override us
         let mut transitive = Vec::new();
         for arg_id in matcher.arg_ids() {
-            if let Some(overrider) = self.cmd.find(arg_id) {
-                if overrider.overrides.contains(arg.get_id()) {
-                    transitive.push(overrider.get_id());
-                }
+            if let Some(overrider) = self.cmd.find(arg_id)
+                && overrider.overrides.contains(arg.get_id())
+            {
+                transitive.push(overrider.get_id());
             }
         }
         for overrider_id in transitive {
@@ -1422,7 +1423,7 @@ impl<'cmd> Parser<'cmd> {
             }
 
             debug!("Parser::add_env: Checking arg `{arg}`");
-            if let Some((_, Some(ref val))) = arg.env {
+            if let Some((_, Some(val))) = &arg.env {
                 debug!("Parser::add_env: Found an opt with value={val:?}");
                 let arg_values = vec![val.to_owned()];
                 let trailing_idx = None;
@@ -1579,12 +1580,11 @@ impl Parser<'_> {
         );
 
         // Add the arg to the matches to build a proper usage string
-        if !self.cmd.is_ignore_errors_set() {
-            if let Some((name, _)) = did_you_mean.as_ref() {
-                if let Some(arg) = self.cmd.get_keymap().get(&name.as_ref()) {
-                    self.start_custom_arg(matcher, arg, ValueSource::CommandLine);
-                }
-            }
+        if !self.cmd.is_ignore_errors_set()
+            && let Some((name, _)) = did_you_mean.as_ref()
+            && let Some(arg) = self.cmd.get_keymap().get(&name.as_ref())
+        {
+            self.start_custom_arg(matcher, arg, ValueSource::CommandLine);
         }
         let did_you_mean = did_you_mean.map(|(arg, cmd)| (format!("--{arg}"), cmd));
 

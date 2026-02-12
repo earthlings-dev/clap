@@ -1,5 +1,5 @@
 use clap::{Arg, ArgAction};
-use roff::{bold, italic, roman, Inline, Roff};
+use roff::{Inline, Roff, bold, italic, roman};
 
 pub(crate) fn subcommand_heading(cmd: &clap::Command) -> &str {
     match cmd.get_subcommand_help_heading() {
@@ -107,28 +107,28 @@ pub(crate) fn options(roff: &mut Roff, items: &[&Arg]) {
         };
 
         let arg_range = opt.get_num_args().expect("built");
-        if arg_range.takes_values() {
-            if let Some(value_names) = &opt.get_value_names() {
-                let (lhs, rhs) = option_value_markers(opt);
+        if arg_range.takes_values()
+            && let Some(value_names) = &opt.get_value_names()
+        {
+            let (lhs, rhs) = option_value_markers(opt);
 
-                header.push(roman(lhs));
-                for (i, name) in value_names.iter().enumerate() {
-                    if i > 0 {
-                        header.push(italic(" "));
-                    }
-
-                    let mut val = format!("<{name}>");
-
-                    // If this is the last value and it's variadic, add "..."
-                    let is_last = i == value_names.len() - 1;
-
-                    if is_last && arg_range.max_values() > value_names.len() {
-                        val.push_str("...");
-                    }
-                    header.push(italic(val));
+            header.push(roman(lhs));
+            for (i, name) in value_names.iter().enumerate() {
+                if i > 0 {
+                    header.push(italic(" "));
                 }
-                header.push(roman(rhs));
+
+                let mut val = format!("<{name}>");
+
+                // If this is the last value and it's variadic, add "..."
+                let is_last = i == value_names.len() - 1;
+
+                if is_last && arg_range.max_values() > value_names.len() {
+                    val.push_str("...");
+                }
+                header.push(italic(val));
             }
+            header.push(roman(rhs));
         }
 
         if let Some(defs) = option_default_values(opt) {
@@ -261,11 +261,7 @@ fn option_markers(opt: &Arg) -> (&'static str, &'static str) {
 }
 
 fn markers(required: bool) -> (&'static str, &'static str) {
-    if required {
-        ("<", ">")
-    } else {
-        ("[", "]")
-    }
+    if required { ("<", ">") } else { ("[", "]") }
 }
 
 fn option_value_markers(arg: &Arg) -> (&'static str, &'static str) {

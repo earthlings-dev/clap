@@ -5,6 +5,7 @@
 
 use std::borrow::Cow;
 
+use crate::ArgAction;
 use crate::builder::Command;
 use crate::builder::StyledStr;
 use crate::builder::Styles;
@@ -14,7 +15,6 @@ use crate::error::ContextKind;
 use crate::error::ContextValue;
 use crate::error::ErrorKind;
 use crate::output::TAB;
-use crate::ArgAction;
 
 /// Defines how to format an error for displaying to the user
 pub trait ErrorFormatter: Sized {
@@ -377,19 +377,19 @@ fn write_values_list(
     possible_values: Option<&ContextValue>,
 ) {
     use std::fmt::Write as _;
-    if let Some(ContextValue::Strings(possible_values)) = possible_values {
-        if !possible_values.is_empty() {
-            let _ = write!(styled, "\n{TAB}[{list_name}: ");
+    if let Some(ContextValue::Strings(possible_values)) = possible_values
+        && !possible_values.is_empty()
+    {
+        let _ = write!(styled, "\n{TAB}[{list_name}: ");
 
-            for (idx, val) in possible_values.iter().enumerate() {
-                if idx > 0 {
-                    styled.push_str(", ");
-                }
-                let _ = write!(styled, "{valid}{}{valid:#}", Escape(val));
+        for (idx, val) in possible_values.iter().enumerate() {
+            if idx > 0 {
+                styled.push_str(", ");
             }
-
-            styled.push_str("]");
+            let _ = write!(styled, "{valid}{}{valid:#}", Escape(val));
         }
+
+        styled.push_str("]");
     }
 }
 

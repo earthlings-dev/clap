@@ -9,25 +9,25 @@ use std::ops::Index;
 use std::path::Path;
 
 // Internal
-use crate::builder::app_settings::{AppFlags, AppSettings};
-use crate::builder::arg_settings::ArgSettings;
-use crate::builder::ext::Extension;
-use crate::builder::ext::Extensions;
 use crate::builder::ArgAction;
 use crate::builder::IntoResettable;
 use crate::builder::PossibleValue;
 use crate::builder::Str;
 use crate::builder::StyledStr;
 use crate::builder::Styles;
+use crate::builder::app_settings::{AppFlags, AppSettings};
+use crate::builder::arg_settings::ArgSettings;
+use crate::builder::ext::Extension;
+use crate::builder::ext::Extensions;
 use crate::builder::{Arg, ArgGroup, ArgPredicate};
 use crate::error::ErrorKind;
 use crate::error::Result as ClapResult;
 use crate::mkeymap::MKeyMap;
 use crate::output::fmt::Stream;
-use crate::output::{fmt::Colorizer, write_help, Usage};
+use crate::output::{Usage, fmt::Colorizer, write_help};
 use crate::parser::{ArgMatcher, ArgMatches, Parser};
 use crate::util::ChildGraph;
-use crate::util::{color::ColorChoice, Id};
+use crate::util::{Id, color::ColorChoice};
 use crate::{Error, INTERNAL_ERROR_MSG};
 
 #[cfg(debug_assertions)]
@@ -175,12 +175,12 @@ impl Command {
     }
 
     fn arg_internal(&mut self, mut arg: Arg) {
-        if let Some(current_disp_ord) = self.current_disp_ord.as_mut() {
-            if !arg.is_positional() {
-                let current = *current_disp_ord;
-                arg.disp_ord.get_or_insert(current);
-                *current_disp_ord = current + 1;
-            }
+        if let Some(current_disp_ord) = self.current_disp_ord.as_mut()
+            && !arg.is_positional()
+        {
+            let current = *current_disp_ord;
+            arg.disp_ord.get_or_insert(current);
+            *current_disp_ord = current + 1;
         }
 
         arg.help_heading
@@ -868,21 +868,25 @@ impl Command {
         let mut raw_args = clap_lex::RawArgs::new(itr);
         let mut cursor = raw_args.cursor();
 
-        if self.settings.is_set(AppSettings::Multicall) {
-            if let Some(argv0) = raw_args.next_os(&mut cursor) {
-                let argv0 = Path::new(&argv0);
-                if let Some(command) = argv0.file_stem().and_then(|f| f.to_str()) {
-                    // Stop borrowing command so we can get another mut ref to it.
-                    let command = command.to_owned();
-                    debug!("Command::try_get_matches_from_mut: Parsed command {command} from argv");
+        if self.settings.is_set(AppSettings::Multicall)
+            && let Some(argv0) = raw_args.next_os(&mut cursor)
+        {
+            let argv0 = Path::new(&argv0);
+            if let Some(command) = argv0.file_stem().and_then(|f| f.to_str()) {
+                // Stop borrowing command so we can get another mut ref to it.
+                let command = command.to_owned();
+                debug!("Command::try_get_matches_from_mut: Parsed command {command} from argv");
 
-                    debug!("Command::try_get_matches_from_mut: Reinserting command into arguments so subcommand parser matches it");
-                    raw_args.insert(&cursor, [&command]);
-                    debug!("Command::try_get_matches_from_mut: Clearing name and bin_name so that displayed command name starts with applet name");
-                    self.name = "".into();
-                    self.bin_name = None;
-                    return self._do_parse(&mut raw_args, cursor);
-                }
+                debug!(
+                    "Command::try_get_matches_from_mut: Reinserting command into arguments so subcommand parser matches it"
+                );
+                raw_args.insert(&cursor, [&command]);
+                debug!(
+                    "Command::try_get_matches_from_mut: Clearing name and bin_name so that displayed command name starts with applet name"
+                );
+                self.name = "".into();
+                self.bin_name = None;
+                return self._do_parse(&mut raw_args, cursor);
             }
         };
 
@@ -893,17 +897,16 @@ impl Command {
         // will have two arguments, './target/release/my_prog', '-a' but we don't want
         // to display
         // the full path when displaying help messages and such
-        if !self.settings.is_set(AppSettings::NoBinaryName) {
-            if let Some(name) = raw_args.next_os(&mut cursor) {
-                let p = Path::new(name);
+        if !self.settings.is_set(AppSettings::NoBinaryName)
+            && let Some(name) = raw_args.next_os(&mut cursor)
+        {
+            let p = Path::new(name);
 
-                if let Some(f) = p.file_name() {
-                    if let Some(s) = f.to_str() {
-                        if self.bin_name.is_none() {
-                            self.bin_name = Some(s.to_owned());
-                        }
-                    }
-                }
+            if let Some(f) = p.file_name()
+                && let Some(s) = f.to_str()
+                && self.bin_name.is_none()
+            {
+                self.bin_name = Some(s.to_owned());
             }
         }
 
@@ -4042,7 +4045,9 @@ impl Command {
                             .map(|id| self.find(id).expect(INTERNAL_ERROR_MSG)),
                     );
                 } else {
-                    panic!("Command::get_arg_conflicts_with: The passed arg conflicts with an arg unknown to the cmd");
+                    panic!(
+                        "Command::get_arg_conflicts_with: The passed arg conflicts with an arg unknown to the cmd"
+                    );
                 }
             }
             result
@@ -4335,10 +4340,10 @@ impl Command {
                 .filter(|a| a.is_global_set())
                 .map(|ga| ga.id.clone()),
         );
-        if let Some((id, matches)) = matches.subcommand() {
-            if let Some(used_sub) = self.find_subcommand(id) {
-                used_sub.get_used_global_args(matches, global_arg_vec);
-            }
+        if let Some((id, matches)) = matches.subcommand()
+            && let Some(used_sub) = self.find_subcommand(id)
+        {
+            used_sub.get_used_global_args(matches, global_arg_vec);
         }
     }
 
@@ -4696,11 +4701,12 @@ impl Command {
                 .map(|arg| arg.get_id().clone())
                 .collect();
 
-            debug_assert!(args_missing_help.is_empty(),
-                    "Command::help_expected is enabled for the Command {}, but at least one of its arguments does not have either `help` or `long_help` set. List of such arguments: {}",
-                    self.name,
-                    args_missing_help.join(", ")
-                );
+            debug_assert!(
+                args_missing_help.is_empty(),
+                "Command::help_expected is enabled for the Command {}, but at least one of its arguments does not have either `help` or `long_help` set. List of such arguments: {}",
+                self.name,
+                args_missing_help.join(", ")
+            );
         }
 
         for sub_app in &self.subcommands {
@@ -5095,10 +5101,10 @@ impl Command {
 
             if let Some(arg) = self.find(a) {
                 for r in arg.requires.iter().filter_map(&func) {
-                    if let Some(req) = self.find(&r) {
-                        if !req.requires.is_empty() {
-                            r_vec.push(req.get_id());
-                        }
+                    if let Some(req) = self.find(&r)
+                        && !req.requires.is_empty()
+                    {
+                        r_vec.push(req.get_id());
                     }
                     args.push(r);
                 }

@@ -14,11 +14,11 @@ use crate::builder::Str;
 use crate::builder::StyledStr;
 use crate::builder::Styles;
 use crate::builder::{Arg, Command};
-use crate::output::display_width;
-use crate::output::wrap;
-use crate::output::Usage;
 use crate::output::TAB;
 use crate::output::TAB_WIDTH;
+use crate::output::Usage;
+use crate::output::display_width;
+use crate::output::wrap;
 use crate::util::FlatSet;
 
 /// `clap` auto-generated help writer
@@ -658,54 +658,55 @@ impl HelpTemplate<'_, '_> {
         self.writer.push_styled(&help);
 
         let mut has_possible_values = false;
-        if let Some(arg) = arg {
-            if !arg.is_hide_possible_values_set() && self.use_long_pv(arg) {
-                const DASH_SPACE: usize = "- ".len();
-                let possible_vals = arg.get_possible_values();
-                if !possible_vals.is_empty() {
-                    debug!("HelpTemplate::help: Found possible vals...{possible_vals:?}");
-                    has_possible_values = true;
+        if let Some(arg) = arg
+            && !arg.is_hide_possible_values_set()
+            && self.use_long_pv(arg)
+        {
+            const DASH_SPACE: usize = "- ".len();
+            let possible_vals = arg.get_possible_values();
+            if !possible_vals.is_empty() {
+                debug!("HelpTemplate::help: Found possible vals...{possible_vals:?}");
+                has_possible_values = true;
 
-                    let longest = possible_vals
-                        .iter()
-                        .filter(|f| !f.is_hide_set())
-                        .map(|f| display_width(f.get_name()))
-                        .max()
-                        .expect("Only called with possible value");
+                let longest = possible_vals
+                    .iter()
+                    .filter(|f| !f.is_hide_set())
+                    .map(|f| display_width(f.get_name()))
+                    .max()
+                    .expect("Only called with possible value");
 
-                    let spaces = spaces + TAB_WIDTH - DASH_SPACE;
-                    let trailing_indent = spaces + DASH_SPACE;
-                    let trailing_indent = self.get_spaces(trailing_indent);
+                let spaces = spaces + TAB_WIDTH - DASH_SPACE;
+                let trailing_indent = spaces + DASH_SPACE;
+                let trailing_indent = self.get_spaces(trailing_indent);
 
-                    if !help_is_empty {
-                        let _ = write!(self.writer, "\n\n{:spaces$}", "");
+                if !help_is_empty {
+                    let _ = write!(self.writer, "\n\n{:spaces$}", "");
+                }
+                self.writer.push_str("Possible values:");
+                for pv in possible_vals.iter().filter(|pv| !pv.is_hide_set()) {
+                    let name = pv.get_name();
+
+                    let mut descr = StyledStr::new();
+                    let _ = write!(&mut descr, "{literal}{name}{literal:#}",);
+                    if let Some(help) = pv.get_help() {
+                        debug!("HelpTemplate::help: Possible Value help");
+                        // To align help messages
+                        let padding = longest - display_width(name);
+                        let _ = write!(&mut descr, ": {:padding$}", "");
+                        descr.push_styled(help);
                     }
-                    self.writer.push_str("Possible values:");
-                    for pv in possible_vals.iter().filter(|pv| !pv.is_hide_set()) {
-                        let name = pv.get_name();
 
-                        let mut descr = StyledStr::new();
-                        let _ = write!(&mut descr, "{literal}{name}{literal:#}",);
-                        if let Some(help) = pv.get_help() {
-                            debug!("HelpTemplate::help: Possible Value help");
-                            // To align help messages
-                            let padding = longest - display_width(name);
-                            let _ = write!(&mut descr, ": {:padding$}", "");
-                            descr.push_styled(help);
-                        }
+                    let avail_chars = if self.term_w > trailing_indent.len() {
+                        self.term_w - trailing_indent.len()
+                    } else {
+                        usize::MAX
+                    };
+                    descr.replace_newline_var();
+                    descr.wrap(avail_chars);
+                    descr.indent("", &trailing_indent);
 
-                        let avail_chars = if self.term_w > trailing_indent.len() {
-                            self.term_w - trailing_indent.len()
-                        } else {
-                            usize::MAX
-                        };
-                        descr.replace_newline_var();
-                        descr.wrap(avail_chars);
-                        descr.indent("", &trailing_indent);
-
-                        let _ = write!(self.writer, "\n{:spaces$}- ", "",);
-                        self.writer.push_styled(&descr);
-                    }
+                    let _ = write!(self.writer, "\n{:spaces$}- ", "",);
+                    self.writer.push_styled(&descr);
                 }
             }
         }
@@ -760,30 +761,30 @@ impl HelpTemplate<'_, '_> {
 
         let mut spec_vals = Vec::new();
         #[cfg(feature = "env")]
-        if let Some(ref env) = a.env {
-            if !a.is_hide_env_set() {
-                debug!(
-                    "HelpTemplate::spec_vals: Found environment variable...[{:?}:{:?}]",
-                    env.0, env.1
-                );
-                let env_val = if !a.is_hide_env_values_set() {
-                    format!(
-                        "={}",
-                        env.1
-                            .as_ref()
-                            .map(|s| s.to_string_lossy())
-                            .unwrap_or_default()
-                    )
-                } else {
-                    Default::default()
-                };
-                let env_info = format!(
-                    "{ctx}[env: {ctx:#}{ctx_val}{}{}{ctx_val:#}{ctx}]{ctx:#}",
-                    env.0.to_string_lossy(),
-                    env_val
-                );
-                spec_vals.push(env_info);
-            }
+        if let Some(env) = &a.env
+            && !a.is_hide_env_set()
+        {
+            debug!(
+                "HelpTemplate::spec_vals: Found environment variable...[{:?}:{:?}]",
+                env.0, env.1
+            );
+            let env_val = if !a.is_hide_env_values_set() {
+                format!(
+                    "={}",
+                    env.1
+                        .as_ref()
+                        .map(|s| s.to_string_lossy())
+                        .unwrap_or_default()
+                )
+            } else {
+                Default::default()
+            };
+            let env_info = format!(
+                "{ctx}[env: {ctx:#}{ctx_val}{}{}{ctx_val:#}{ctx}]{ctx:#}",
+                env.0.to_string_lossy(),
+                env_val
+            );
+            spec_vals.push(env_info);
         }
         if a.is_takes_value_set() && !a.is_hide_default_value_set() && !a.default_vals.is_empty() {
             debug!(

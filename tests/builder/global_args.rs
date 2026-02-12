@@ -172,7 +172,7 @@ fn global_overrides_default() {
 #[test]
 #[cfg(feature = "env")]
 fn global_overrides_env() {
-    std::env::set_var("GLOBAL_OVERRIDES_ENV", "from_env");
+    unsafe { std::env::set_var("GLOBAL_OVERRIDES_ENV", "from_env") };
 
     let cmd = Command::new("test")
         .arg(
